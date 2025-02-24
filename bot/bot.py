@@ -1,8 +1,10 @@
 import os
 import re
 
+import messages
 import requests
 from dotenv import load_dotenv
+from sheets_integration import append_values
 from telebot import TeleBot
 
 load_dotenv()
@@ -53,7 +55,7 @@ def parse_message(message):
     cur_str = match.group(3)
 
     try:
-        price = float(price_str)
+        price = round(float(price_str), 2)
     except ValueError:
         return None
 
@@ -75,23 +77,39 @@ def parse_message(message):
     return {"store": store, "price": price, "currency": cur}
 
 
-@bot.message_handler()
-def send_message(message):
-    chat_id = message.chat.id
+def write_transaction(chat_id, trans_data):
+    sheet_arr = [
+        trans_data["store"],
+        trans_data["price"],
+        trans_data["currency"],
+    ]
 
-    try:
-        trans_data = parse_message(message.text)
-
-        if trans_data["currency"] != "EUR":
-            forex_data = get_rate(trans_data["currency"], trans_data["price"])
-            message = f"<b>Store</b>: {trans_data['store']}\n<b>Price in EUR</b>: {forex_data['amount']}\n<b>Currency</b>: EUR "
-        else:
-            message = f"<b>Store</b>: {trans_data['store']}\n<b>Price</b>: {trans_data['price']}\n<b>Currency</b>: {trans_data['currency']}"
-
-    except Exception as e:
-        message = f"The format is not right: {e}"
+    if trans_data["currency"] != "EUR":
+        forex_data = get_rate(trans_data["currency"], trans_data["price"])
+        message = f"<b>Store</b>: {trans_data['store']}\n<b>Price in EUR</b>: {forex_data['amount']}\n<b>Currency</b>: EUR "
+    else:
+        append_values(sheet_arr)
+        message = f"<b>Store</b>: {trans_data['store']}\n<b>Price</b>: {trans_data['price']}\n<b>Currency</b>: {trans_data['currency']}"
 
     bot.send_message(chat_id, message, "HTML")
+
+
+@bot.message_handler(commands=["start"])
+def start_message(message):
+    chat_id = message.chat.id
+    message = messages.WELCOME_MESSAGE
+    bot.send_message(chat_id, message)
+
+
+@bot.message_handler(func=lambda message: True)
+def check_message_for_transaction(message):
+    chat_id = message.chat.id
+    try:
+        trans_data = parse_message(message.text)
+        write_transaction(chat_id, trans_data)
+    except Exception as e:
+        message = f"{messages.NOT_TRANSACTION} - {e}"
+        bot.send_message(chat_id, message)
 
 
 if __name__ == "__main__":
