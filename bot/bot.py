@@ -1,11 +1,12 @@
 import os
 import re
+from datetime import date
 
 import messages
 import requests
 from dotenv import load_dotenv
 from sheets_integration import append_values
-from telebot import TeleBot
+from telebot import TeleBot, types
 
 load_dotenv()
 
@@ -25,19 +26,22 @@ CURRENCY_MAP = {
         "тенге",
     ],
 }
-RATES_URL = "https://www.amdoren.com/api/currency.php"
+RATES_URL = "https://api.currencyapi.com/v3/latest"
 TARGET_CUR = "EUR"
 
 
-def get_rate(currency, amount):
+def get_rate(currency):
     payload = {
-        "api_key": os.getenv("AMDOREN_KEY"),
-        "from": currency,
-        "to": TARGET_CUR,
-        "amount": amount,
+        "apikey": os.getenv("CURRENCYAPI_KEY"),
+        "base_currency": currency,
+        "currencies": TARGET_CUR,
     }
-    response = requests.get(RATES_URL, params=payload)
-    return response.json()
+    try:
+        response = requests.get(RATES_URL, params=payload)
+    except Exception as err:
+        return err
+    conversion_rate = response.json()["data"]["EUR"]["value"]
+    return conversion_rate
 
 
 def parse_message(message):
@@ -74,22 +78,28 @@ def parse_message(message):
         if not cur_found:
             cur = cur_str.upper()
 
-    return {"store": store, "price": price, "currency": cur}
+    return {"pos": store, "sum": price, "currency": cur}
 
 
 def write_transaction(chat_id, trans_data):
+    trans_date = date.today()
     sheet_arr = [
-        trans_data["store"],
-        trans_data["price"],
+        trans_date.strftime("%d/%m/%Y"),
+        trans_data["pos"],
+        trans_data["sum"],
         trans_data["currency"],
     ]
 
     if trans_data["currency"] != "EUR":
-        forex_data = get_rate(trans_data["currency"], trans_data["price"])
-        message = f"<b>Store</b>: {trans_data['store']}\n<b>Price in EUR</b>: {forex_data['amount']}\n<b>Currency</b>: EUR "
+        price_in_eur = get_rate(trans_data["currency"]) * trans_data["sum"]
+        message = f"<b>Store</b>: {trans_data['pos']}\
+                    <b>Price in EUR</b>: {round(price_in_eur, 2)}\
+                    <b>Currency</b>: EUR "
     else:
         append_values(sheet_arr)
-        message = f"<b>Store</b>: {trans_data['store']}\n<b>Price</b>: {trans_data['price']}\n<b>Currency</b>: {trans_data['currency']}"
+        message = f"<b>Store</b>: {trans_data['pos']}\
+                    <b>Price</b>: {trans_data['sum']}\
+                    <b>Currency</b>: {trans_data['currency']}"
 
     bot.send_message(chat_id, message, "HTML")
 
@@ -97,6 +107,10 @@ def write_transaction(chat_id, trans_data):
 @bot.message_handler(commands=["start"])
 def start_message(message):
     chat_id = message.chat.id
+
+    c1 = types.BotCommand(command="start", description="start the bot")
+    bot.set_my_commands(commands=[c1])
+
     message = messages.WELCOME_MESSAGE
     bot.send_message(chat_id, message)
 

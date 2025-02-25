@@ -10,7 +10,7 @@ from googleapiclient.errors import HttpError
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-TABLE_RANGE = "transaction_db!A1:B1"
+TABLE_RANGE = "transaction_db!A1:D1"
 
 load_dotenv()
 
@@ -52,7 +52,6 @@ def get_values():
 
         print("Name, Major:")
         for row in values:
-            # Print columns A and E, which correspond to indices 0 and 4.
             print(row)
     except HttpError as err:
         print(err)
@@ -77,9 +76,3 @@ def append_values(transaction_data):
         )
     except HttpError as err:
         print(err)
-
-
-if __name__ == "__main__":
-    get_values()
-    transaction_data = ["coffee", "123.123", "EUR"]
-    append_values(transaction_data)
