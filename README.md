@@ -5,9 +5,14 @@
 - Getting up-to-date currency rates to save all data in one main currency.
 - User-friendly way to add category to an expense.
 - Integration with Google Sheets to save and retrieve expenses data.
+- Basic tests and logging.
 
 ## Screenshots
-
+<div align="left">
+<img src="https://i.postimg.cc/4xBTZKfm/2025-02-26-22-20-31.jpg" align="center" style="width: 20%" />
+<img src="https://i.postimg.cc/jSsrG6rp/2025-02-26-22-20-34.jpg" align="center" style="width: 20%" />
+<img src="https://i.postimg.cc/B61WxMxK/2025-02-26-22-20-37.jpg" align="center" style="width: 20%" />
+</div>
 
 ## Commands
 - `/start` – Get hello message
