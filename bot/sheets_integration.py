@@ -1,3 +1,4 @@
+import logging
 import os
 import os.path
 
@@ -10,9 +11,16 @@ from googleapiclient.errors import HttpError
 
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
-TABLE_RANGE = "transaction_db!A1:D1"
+TABLE_RANGE = "transaction_db!A:F"
 
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s, %(levelname)s, %(message)s",
+    filename="main.log",
+    filemode="a",
+)
 
 
 def get_sheet():
@@ -49,12 +57,15 @@ def get_values():
         if not values:
             print("No data found.")
             return
+        return values
 
-        print("Name, Major:")
-        for row in values:
-            print(row)
     except HttpError as err:
         print(err)
+
+
+def get_last_values(count=5):
+    data = get_values()
+    return data[-count:]
 
 
 def append_values(transaction_data):
@@ -64,15 +75,11 @@ def append_values(transaction_data):
         "values": [transaction_data],
     }
     try:
-        data = (
-            sheet.values()
-            .append(
-                spreadsheetId=os.getenv("SHEET_ID"),
-                range=TABLE_RANGE,
-                body=body,
-                valueInputOption="RAW",
-            )
-            .execute()
-        )
+        sheet.values().append(
+            spreadsheetId=os.getenv("SHEET_ID"),
+            range=TABLE_RANGE,
+            body=body,
+            valueInputOption="RAW",
+        ).execute()
     except HttpError as err:
-        print(err)
+        logging.critical(err)

@@ -1,15 +1,29 @@
+import logging
 import os
 import re
 from datetime import date
+from http import HTTPStatus
 
 import messages
 import requests
 from dotenv import load_dotenv
-from sheets_integration import append_values
+from exceptions import (
+    NoApiResponseError,
+    NoCredentialsError,
+    ServerResponseError,
+)
+from sheets_integration import append_values, get_last_values
 from telebot import TeleBot, types
 from telebot.util import quick_markup
 
 load_dotenv()
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s, %(levelname)s, %(message)s",
+    filename="main.log",
+    filemode="a",
+)
 
 bot = TeleBot(token=os.getenv("BOT_TOKEN"))
 
@@ -27,10 +41,38 @@ def start_message(message):
     chat_id = message.chat.id
 
     c1 = types.BotCommand(command="start", description="start the bot")
-    bot.set_my_commands(commands=[c1])
+    c2 = types.BotCommand(command="last", description="last 5 expenses")
+    bot.set_my_commands(commands=[c1, c2])
 
     message = messages.WELCOME_MESSAGE
     bot.send_message(chat_id, message)
+
+
+@bot.message_handler(commands=["last"])
+def last_expenses(message):
+    chat_id = message.chat.id
+    try:
+        data = get_last_values(5)
+
+        lines = []
+        header = "<b>Date    Store    Sum    Currency    Sum in EUR    Category</b>"
+        lines.append(header)
+
+        for row in data:
+            date, store, sum, currency, sum_in_eur, category = row
+            line = f"{date} -- {store} -- {sum} -- {currency} -- {sum_in_eur} -- {category}"
+            lines.append(line)
+
+        message = "\n".join(lines)
+        bot.send_message(chat_id, message, "HTML")
+    except Exception as e:
+        logging.exception(
+            f"Error in last_expenses handler for chat_id={message.chat.id}. Error = {e}"
+        )
+        bot.send_message(
+            message.chat.id,
+            "An error occurred while getting the last expenses.",
+        )
 
 
 @bot.message_handler(regexp=TRANS_REGEX)
@@ -61,10 +103,7 @@ def parse_message(message):
         TRANS_REGEX,
         re.IGNORECASE,
     )
-    try:
-        match = pattern.match(message.strip())
-    except Exception as e:
-        return e
+    match = pattern.match(message.strip())
 
     store = match.group(1).strip()
     price_str = match.group(2).replace(",", ".")
@@ -86,7 +125,9 @@ def parse_message(message):
 def check_currency_code(message, trans_data):
     chat_id = message.chat.id
     trans_data["currency"] = message.text.upper().strip()
-    if trans_data["currency"] not in get_currency_codes():
+    if message.text == "stop":
+        bot.send_message(chat_id, messages.STOP_INPUT)
+    elif trans_data["currency"] not in get_currency_codes():
         msg = bot.send_message(chat_id, messages.UNKNOWN_CURRENCY)
         bot.register_next_step_handler(
             msg,
@@ -145,6 +186,7 @@ def callback_query(call):
     if call.data == "decline":
         bot.answer_callback_query(call.id, "Declined")
         trans_data.pop(chat_id, None)
+        bot.delete_message(chat_id, call.message.id)
         bot.send_message(
             chat_id,
             messages.TRANSACTION_DELETED,
@@ -162,6 +204,7 @@ def callback_query(call):
         append_values(sheet_arr)
         trans_data.pop(chat_id, None)
         bot.answer_callback_query(call.id, "Approved")
+        bot.delete_message(chat_id, call.message.id)
         bot.send_message(
             chat_id,
             messages.TRANSACTION_SAVED,
@@ -177,8 +220,14 @@ def get_currency_codes():
     payload = {"apikey": os.getenv("CURRENCYAPI_KEY")}
     try:
         response = requests.get(CURR_URL, params=payload)
-    except Exception as err:
-        return err
+    except Exception:
+        raise NoApiResponseError("No response from API")
+
+    if response.status_code != HTTPStatus.OK:
+        raise ServerResponseError(
+            f"Response code is different from 200: {response.status_code}"
+        )
+
     res = response.json()["data"]
     list_of_currencies = list(res.keys())
     return list_of_currencies
@@ -192,8 +241,14 @@ def get_rate(currency):
     }
     try:
         response = requests.get(RATES_URL, params=payload)
-    except Exception as err:
-        return err
+    except Exception:
+        raise NoApiResponseError("No response from API")
+
+    if response.status_code != HTTPStatus.OK:
+        raise ServerResponseError(
+            f"Response code is different from 200: {response.status_code}"
+        )
+
     conversion_rate = response.json()["data"]["EUR"]["value"]
     return conversion_rate
 
@@ -208,5 +263,20 @@ def keyboard():
     return markup
 
 
+def check_tokens():
+    """Check for all required tokens"""
+    if (
+        not os.getenv("BOT_TOKEN")
+        or not os.getenv("SHEET_ID")
+        or not os.getenv("CURRENCYAPI_KEY")
+    ):
+        logging.critical("Not all required tokens are present.")
+        return False
+    return True
+
+
 if __name__ == "__main__":
+    if not check_tokens():
+        raise NoCredentialsError
+
     bot.polling(skip_pending=True)
