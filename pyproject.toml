@@ -1,0 +1,17 @@
+[tool.ruff]
+src = ["bot"]
+line-length = 88 
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+
+[tool.ruff.lint.isort]
+known-local-folder= [
+    "messages",
+    "sheets_integration",
+    "exceptions",
+]
+
+[tool.ruff.lint.pycodestyle]
+max-line-length = 88

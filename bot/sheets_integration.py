@@ -9,38 +9,38 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
 
-TABLE_RANGE = "transaction_db!A:F"
+TABLE_RANGE = 'transaction_db!A:F'
 
 load_dotenv()
 
 logging.basicConfig(
     level=logging.DEBUG,
-    format="%(asctime)s, %(levelname)s, %(message)s",
-    filename="main.log",
-    filemode="a",
+    format='%(asctime)s, %(levelname)s, %(message)s',
+    filename='main.log',
+    filemode='a',
 )
 
 
 def get_sheet():
     creds = None
-    if os.path.exists("token.json"):
-        creds = Credentials.from_authorized_user_file("token.json", SCOPES)
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
 
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
         else:
             flow = InstalledAppFlow.from_client_secrets_file(
-                "credentials.json",
+                'credentials.json',
                 SCOPES,
             )
             creds = flow.run_local_server(port=0)
 
-        with open("token.json", "w") as token:
+        with open('token.json', 'w') as token:
             token.write(creds.to_json())
-    sheet = build("sheets", "v4", credentials=creds).spreadsheets()
+    sheet = build('sheets', 'v4', credentials=creds).spreadsheets()
     return sheet
 
 
@@ -49,13 +49,13 @@ def get_values():
     try:
         result = (
             sheet.values()
-            .get(spreadsheetId=os.getenv("SHEET_ID"), range=TABLE_RANGE)
+            .get(spreadsheetId=os.getenv('SHEET_ID'), range=TABLE_RANGE)
             .execute()
         )
-        values = result.get("values", [])
+        values = result.get('values', [])
 
         if not values:
-            print("No data found.")
+            print('No data found.')
             return
         return values
 
@@ -71,15 +71,15 @@ def get_last_values(count=5):
 def append_values(transaction_data):
     sheet = get_sheet()
     body = {
-        "range": TABLE_RANGE,
-        "values": [transaction_data],
+        'range': TABLE_RANGE,
+        'values': [transaction_data],
     }
     try:
         sheet.values().append(
-            spreadsheetId=os.getenv("SHEET_ID"),
+            spreadsheetId=os.getenv('SHEET_ID'),
             range=TABLE_RANGE,
             body=body,
-            valueInputOption="RAW",
+            valueInputOption='RAW',
         ).execute()
     except HttpError as err:
         logging.critical(err)
