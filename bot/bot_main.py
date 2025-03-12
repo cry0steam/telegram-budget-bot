@@ -9,13 +9,13 @@ from dotenv import load_dotenv
 from telebot import TeleBot, types
 from telebot.util import quick_markup
 
+import database
 import messages
 from exceptions import (
     NoApiResponseError,
     NoCredentialsError,
     ServerResponseError,
 )
-from sheets_integration import append_values, get_last_values
 
 load_dotenv()
 
@@ -54,7 +54,7 @@ def last_expenses(message):
     """Provide list of 5 last expenses from Google Sheet."""
     chat_id = message.chat.id
     try:
-        data = get_last_values(5)
+        data = database.get_last_expenses(5)
 
         lines = []
         header = '<b>Date    Store    Sum    Currency    Sum in EUR    Category</b>'
@@ -109,12 +109,12 @@ def parse_message(message):
     )
     match = pattern.match(message.strip())
 
-    store = match.group(1).strip()
-    price_str = match.group(2).replace(',', '.')
+    pos = match.group(1).strip()
+    amount_str = match.group(2).replace(',', '.')
     cur_str = match.group(3)
 
     try:
-        price = round(float(price_str), 2)
+        amount = round(float(amount_str), 2)
     except ValueError:
         return None
 
@@ -123,7 +123,7 @@ def parse_message(message):
     else:
         cur = cur_str.upper().strip()
 
-    return {'pos': store, 'sum': price, 'currency': cur}
+    return {'pos': pos, 'sum': amount, 'currency': cur}
 
 
 def check_currency_code(message, trans_data):
@@ -146,7 +146,7 @@ def check_currency_code(message, trans_data):
 
 
 def write_transaction(message, trans_data):
-    """Write expense data into Google Sheets"""
+    """Write expense data DB"""
     chat_id = message.chat.id
     if 'category' not in trans_data:
         cat_msg = bot.send_message(
@@ -200,16 +200,15 @@ def callback_query(call):
         )
     if call.data == 'approve':
         trans_date = date.today()
-        sheet_arr = [
+        database.add_expense(
             trans_date.strftime('%d/%m/%Y'),
             trans_data['pos'],
             trans_data['sum'],
             trans_data['currency'],
             trans_data['sum_in_eur'],
             trans_data['category'],
-        ]
-        append_values(sheet_arr)
-        trans_data.pop(chat_id, None)
+        )
+        data_to_write.pop(chat_id, None)
         bot.answer_callback_query(call.id, 'Approved')
         bot.delete_message(chat_id, call.message.id)
         bot.send_message(
@@ -276,11 +275,7 @@ def keyboard():
 
 def check_tokens():
     """Check for all required tokens"""
-    if (
-        not os.getenv('BOT_TOKEN')
-        or not os.getenv('SHEET_ID')
-        or not os.getenv('CURRENCYAPI_KEY')
-    ):
+    if not os.getenv('BOT_TOKEN') or not os.getenv('CURRENCYAPI_KEY'):
         logging.critical('Not all required tokens are present.')
         return False
     return True
@@ -289,5 +284,7 @@ def check_tokens():
 if __name__ == '__main__':
     if not check_tokens():
         raise NoCredentialsError
+
+    database.init_db()
 
     bot.polling(skip_pending=True)

@@ -9,7 +9,7 @@ indent-style = "space"
 [tool.ruff.lint.isort]
 known-local-folder= [
     "messages",
-    "sheets_integration",
+    "database",
     "exceptions",
 ]
 
