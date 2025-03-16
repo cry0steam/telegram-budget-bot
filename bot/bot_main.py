@@ -12,6 +12,8 @@ from dotenv import load_dotenv
 from telebot import TeleBot, types
 from telebot.util import quick_markup
 
+import keyboards
+
 import database
 import messages
 from exceptions import (
@@ -188,7 +190,7 @@ def write_transaction(message, trans_data):
         cat_msg = bot.send_message(
             chat_id,
             messages.CATEGORY,
-            reply_markup=keyboard(),
+            reply_markup=keyboards.category_keyboard(),
         )
         bot.register_next_step_handler(cat_msg, get_category, trans_data)
     else:
@@ -298,17 +300,6 @@ def get_rate(currency: str) -> float:
 
     conversion_rate = response.json()['data']['EUR']['value']
     return conversion_rate
-
-
-def keyboard():
-    """Keyboard with categories markup."""
-    keys = ['Grocery', 'Bills', 'Commute', 'Subs', 'Misc', 'Reserve']
-    markup = types.ReplyKeyboardMarkup(row_width=3)
-    row = [types.KeyboardButton(x) for x in keys[:3]]
-    markup.add(*row)
-    row = [types.KeyboardButton(x) for x in keys[3:6]]
-    markup.add(*row)
-    return markup
 
 
 def check_tokens():
