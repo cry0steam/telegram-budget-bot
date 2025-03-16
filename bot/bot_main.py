@@ -41,10 +41,6 @@ data_to_write = {}
 def start_message(message):
     chat_id = message.chat.id
 
-    c1 = types.BotCommand(command='start', description='start the bot')
-    c2 = types.BotCommand(command='last', description='last 5 expenses')
-    bot.set_my_commands(commands=[c1, c2])
-
     message = messages.WELCOME_MESSAGE
     bot.send_message(chat_id, message)
 
@@ -99,6 +95,15 @@ def check_message_for_transaction(message):
 @bot.message_handler(func=lambda message: True)
 def send_basic_message(message):
     bot.send_message(message.chat.id, messages.NOT_TRANSACTION)
+
+
+def setup_bot_commands():
+    """Setup bot commands in the Bot Menu"""
+    commands = [
+        types.BotCommand(command='start', description='Start the bot'),
+        types.BotCommand(command='last', description='Show last 5 expenses'),
+    ]
+    bot.set_my_commands(commands)
 
 
 def parse_message(message):
@@ -285,6 +290,7 @@ if __name__ == '__main__':
     if not check_tokens():
         raise NoCredentialsError
 
+    setup_bot_commands()
     database.init_db()
 
     bot.polling(skip_pending=True)

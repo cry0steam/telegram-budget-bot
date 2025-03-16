@@ -1,8 +1,8 @@
+import os
 import sqlite3
 from datetime import datetime
 
-# Database configuration
-DB_FILE = 'expenses.db'
+DB_FILE = os.getenv('DB_FILE', 'expenses.db')
 
 
 def init_db():
