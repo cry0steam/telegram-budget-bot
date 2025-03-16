@@ -1,9 +1,12 @@
+import io
 import logging
 import os
 import re
 from datetime import date
 from http import HTTPStatus
 
+import matplotlib.pyplot as plt
+import pandas as pd
 import requests
 from dotenv import load_dotenv
 from telebot import TeleBot, types
@@ -50,19 +53,47 @@ def last_expenses(message):
     """Provide list of 5 last expenses from Google Sheet."""
     chat_id = message.chat.id
     try:
-        data = database.get_last_expenses(5)
+        data = database.get_last_expenses(10)
+        columns = [
+            'Date',
+            'Store',
+            'Amount',
+            'Currency',
+            'Amount EUR',
+            'Category',
+        ]
+        df = pd.DataFrame(data, columns=columns)
+        # Create a figure and a table
+        fig, ax = plt.subplots(figsize=(12, 6))
+        ax.axis('off')  # Hide axis
 
-        lines = []
-        header = '<b>Date    Store    Sum    Currency    Sum in EUR    Category</b>'
-        lines.append(header)
+        # Create the table and style it
+        table = ax.table(
+            cellText=df.values,
+            colLabels=df.columns,
+            loc='center',
+            cellLoc='center',
+            colColours=['#f2f2f2'] * len(df.columns),
+        )
 
-        for row in data:
-            date, store, sum, currency, sum_in_eur, category = row
-            line = f'{date} -- {store} -- {sum} -- {currency} -- {sum_in_eur} -- {category}'
-            lines.append(line)
+        # Style the table
+        table.auto_set_font_size(False)
+        table.set_fontsize(10)
+        table.scale(1, 1.5)  # Adjust table size
 
-        message = '\n'.join(lines)
-        bot.send_message(chat_id, message, 'HTML')
+        # Title
+        plt.title('Last 10 Expenses', fontsize=16)
+
+        # Save figure to a bytes buffer
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
+        buf.seek(0)
+
+        # Send the image
+        bot.send_photo(chat_id, buf, caption='Here are your last 10 expenses:')
+
+        plt.close(fig)  # Close the figure to free memory
+
     except Exception as e:
         logging.exception(
             f"""Error in last_expenses handler for chat_id={message.chat.id}.
@@ -72,6 +103,27 @@ def last_expenses(message):
             message.chat.id,
             'An error occurred while getting the last expenses.',
         )
+
+    #     lines = []
+    #     header = '<b>Date    Store    Sum    Currency    Sum in EUR    Category</b>'
+    #     lines.append(header)
+    #
+    #     for row in data:
+    #         date, store, sum, currency, sum_in_eur, category = row
+    #         line = f'{date} -- {store} -- {sum} -- {currency} -- {sum_in_eur} -- {category}'
+    #         lines.append(line)
+    #
+    #     message = '\n'.join(lines)
+    #     bot.send_message(chat_id, message, 'HTML')
+    # except Exception as e:
+    #     logging.exception(
+    #         f"""Error in last_expenses handler for chat_id={message.chat.id}.
+    #         Error = {e}"""
+    #     )
+    #     bot.send_message(
+    #         message.chat.id,
+    #         'An error occurred while getting the last expenses.',
+    #     )
 
 
 @bot.message_handler(regexp=TRANS_REGEX)
@@ -101,7 +153,7 @@ def setup_bot_commands():
     """Setup bot commands in the Bot Menu"""
     commands = [
         types.BotCommand(command='start', description='Start the bot'),
-        types.BotCommand(command='last', description='Show last 5 expenses'),
+        types.BotCommand(command='last', description='Show last 10 expenses'),
     ]
     bot.set_my_commands(commands)
 
@@ -114,8 +166,8 @@ def parse_message(message):
     )
     match = pattern.match(message.strip())
 
-    pos = match.group(1).strip()
-    amount_str = match.group(2).replace(',', '.')
+    amount_str = match.group(1).replace(',', '.')
+    pos = match.group(2).strip()
     cur_str = match.group(3)
 
     try:
