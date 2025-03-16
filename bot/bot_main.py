@@ -237,10 +237,9 @@ def callback_query(call):
         )
     if call.data == 'approve':
         trans_date = date.today()
-        print(user.id)
         database.add_expense(
             trans_date.strftime('%d/%m/%Y'),
-            user.id,
+            user.username,
             trans_data['pos'],
             trans_data['sum'],
             trans_data['currency'],
