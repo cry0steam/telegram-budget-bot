@@ -31,7 +31,7 @@ logging.basicConfig(
 
 bot = TeleBot(token=os.getenv('BOT_TOKEN'))
 
-TRANS_REGEX = r'^(.*?)\s+(\d+(?:[.,]\d+)?)(?:\s*(\S+))?$'
+TRANS_REGEX = r'^(\d+(?:[.,]\d+)?)\s+(.*?)\s+\(([^)]+)\)$'
 DEFAULT_CURRENCY = 'EUR'
 TARGET_CUR = 'EUR'
 RATES_URL = 'https://api.currencyapi.com/v3/latest'
@@ -103,27 +103,6 @@ def last_expenses(message):
             message.chat.id,
             'An error occurred while getting the last expenses.',
         )
-
-    #     lines = []
-    #     header = '<b>Date    Store    Sum    Currency    Sum in EUR    Category</b>'
-    #     lines.append(header)
-    #
-    #     for row in data:
-    #         date, store, sum, currency, sum_in_eur, category = row
-    #         line = f'{date} -- {store} -- {sum} -- {currency} -- {sum_in_eur} -- {category}'
-    #         lines.append(line)
-    #
-    #     message = '\n'.join(lines)
-    #     bot.send_message(chat_id, message, 'HTML')
-    # except Exception as e:
-    #     logging.exception(
-    #         f"""Error in last_expenses handler for chat_id={message.chat.id}.
-    #         Error = {e}"""
-    #     )
-    #     bot.send_message(
-    #         message.chat.id,
-    #         'An error occurred while getting the last expenses.',
-    #     )
 
 
 @bot.message_handler(regexp=TRANS_REGEX)
