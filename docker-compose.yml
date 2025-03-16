@@ -1,8 +1,6 @@
-version: '3'
-
 services:
   bot:
-    image: ${DOCKER_USERNAME}/telegram-budget-bot:latest
+    image: cryosteam/telegram-budget-bot:latest
     restart: always
     volumes:
       - bot-data:/data
