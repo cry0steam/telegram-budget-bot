@@ -1,6 +1,4 @@
-NOT_TRANSACTION = (
-    'If you want to add an expense, send a message like this: "IKEA 23.2 USD(opt)".'
-)
+NOT_TRANSACTION = 'If you want to add an expense, send a message like this: "132.34 pingo doce (usd), currency is optional".'
 WELCOME_MESSAGE = (
     "Hello, I'm Budget Bot, and I'm here to help you track all your expenses!"
 )

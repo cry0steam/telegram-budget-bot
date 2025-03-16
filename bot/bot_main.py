@@ -31,7 +31,7 @@ logging.basicConfig(
 
 bot = TeleBot(token=os.getenv('BOT_TOKEN'))
 
-TRANS_REGEX = r'^(\d+(?:[.,]\d+)?)\s+(.*?)\s+\(([^)]+)\)$'
+TRANS_REGEX = r'^(\d+(?:[.,]\d+)?)\s+(.*?)(?:\s+\(([^)]+)\))?$'
 DEFAULT_CURRENCY = 'EUR'
 TARGET_CUR = 'EUR'
 RATES_URL = 'https://api.currencyapi.com/v3/latest'
@@ -237,9 +237,10 @@ def callback_query(call):
         )
     if call.data == 'approve':
         trans_date = date.today()
+        print(user.id)
         database.add_expense(
             trans_date.strftime('%d/%m/%Y'),
-            user.username,
+            user.id,
             trans_data['pos'],
             trans_data['sum'],
             trans_data['currency'],

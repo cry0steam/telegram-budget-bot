@@ -14,7 +14,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS expenses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,
-        username TEXT,
+        username TEXT NOT NULL,
         pos TEXT NOT NULL,
         amount REAL NOT NULL,
         currency TEXT NOT NULL,
@@ -34,7 +34,7 @@ def add_expense(date, username, pos, amount, currency, amount_eur, category):
     cursor = conn.cursor()
 
     cursor.execute(
-        'INSERT INTO expenses (date, username, pos, amount, currency, amount_eur, category, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO expenses (date, username, pos, amount, currency, amount_eur, category, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
         (
             date,
             username,
