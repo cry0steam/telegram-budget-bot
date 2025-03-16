@@ -50,12 +50,12 @@ def start_message(message):
 
 @bot.message_handler(commands=['last'])
 def last_expenses(message):
-    """Provide list of 5 last expenses from Google Sheet."""
     chat_id = message.chat.id
     try:
         data = database.get_last_expenses(10)
         columns = [
             'Date',
+            'User',
             'Store',
             'Amount',
             'Currency',
@@ -225,6 +225,7 @@ def write_transaction(message, trans_data):
 def callback_query(call):
     """Handle callback action."""
     chat_id = call.message.chat.id
+    user = call.from_user
     trans_data = data_to_write.get(chat_id)
     if call.data == 'decline':
         bot.answer_callback_query(call.id, 'Declined')
@@ -238,6 +239,7 @@ def callback_query(call):
         trans_date = date.today()
         database.add_expense(
             trans_date.strftime('%d/%m/%Y'),
+            user.username,
             trans_data['pos'],
             trans_data['sum'],
             trans_data['currency'],

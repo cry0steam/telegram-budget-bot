@@ -14,6 +14,7 @@ def init_db():
     CREATE TABLE IF NOT EXISTS expenses (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         date TEXT NOT NULL,
+        username TEXT,
         pos TEXT NOT NULL,
         amount REAL NOT NULL,
         currency TEXT NOT NULL,
@@ -27,15 +28,16 @@ def init_db():
     conn.close()
 
 
-def add_expense(date, pos, amount, currency, amount_eur, category):
+def add_expense(date, username, pos, amount, currency, amount_eur, category):
     """Add a new expense to the database."""
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
     cursor.execute(
-        'INSERT INTO expenses (date, pos, amount, currency, amount_eur, category, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO expenses (date, username, pos, amount, currency, amount_eur, category, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
         (
             date,
+            username,
             pos,
             amount,
             currency,
@@ -56,7 +58,7 @@ def get_last_expenses(limit=5):
     cursor = conn.cursor()
 
     cursor.execute(
-        'SELECT date, pos, amount, currency, amount_eur, category FROM expenses ORDER BY id DESC LIMIT ?',
+        'SELECT date, username, pos, amount, currency, amount_eur, category FROM expenses ORDER BY id DESC LIMIT ?',
         (limit,),
     )
 
