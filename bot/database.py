@@ -1,6 +1,7 @@
 import os
 import sqlite3
 from datetime import datetime
+import logging
 
 DB_FILE = os.getenv('DB_FILE', 'expenses.db')
 
@@ -194,15 +195,18 @@ def add_budget(month, category, amount_eur):
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
+    # Convert month number to text format (e.g., "3" to "03")
+    month_text = f"{month:02d}"
+
     try:
         cursor.execute(
-            '''INSERT INTO budget_targets 
+            '''INSERT INTO planned_expenses 
                (month, category, amount_eur, created_at) 
                VALUES (?, ?, ?, ?)
                ON CONFLICT(month, category) 
                DO UPDATE SET amount_eur = ?, created_at = ?''',
             (
-                month,
+                month_text,
                 category,
                 amount_eur,
                 datetime.now().isoformat(),
@@ -212,7 +216,19 @@ def add_budget(month, category, amount_eur):
         )
         conn.commit()
         success = True
-    except sqlite3.Error:
+    except sqlite3.Error as e:
+        logging.error(
+            f"""Database error in add_budget:
+            month={month_text}, category={category}, amount={amount_eur}
+            Error: {str(e)}"""
+        )
+        success = False
+    except Exception as e:
+        logging.exception(
+            f"""Unexpected error in add_budget:
+            month={month_text}, category={category}, amount={amount_eur}
+            Error: {str(e)}"""
+        )
         success = False
     finally:
         conn.close()
@@ -228,8 +244,8 @@ def get_budget_comparison():
     # Get all months that have either budget or expenses
     cursor.execute('''
         WITH months AS (
-            -- Get months from budget_targets
-            SELECT DISTINCT month FROM budget_targets
+            -- Get months from planned_expenses
+            SELECT DISTINCT CAST(month AS INTEGER) as month FROM planned_expenses
             UNION
             -- Get months from expenses (extract month from created_at)
             SELECT DISTINCT CAST(strftime('%m', substr(created_at, 1, 10)) AS INTEGER) as month 
@@ -245,9 +261,9 @@ def get_budget_comparison():
         # Get budget data for the month
         cursor.execute('''
             SELECT category, amount_eur
-            FROM budget_targets
+            FROM planned_expenses
             WHERE month = ?
-        ''', (month,))
+        ''', (f"{month:02d}",))  # Convert month number to text format
         budget_data = dict(cursor.fetchall())
 
         # Get actual expenses for the month

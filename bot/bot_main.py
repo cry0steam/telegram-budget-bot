@@ -234,11 +234,22 @@ def save_budgets(chat_id):
     """Save all budget targets to the database."""
     state = budget_state[chat_id]
     success = True
+    error_msg = None
     
-    for category, amount in state['budgets'].items():
-        if not database.add_budget(state['month'], category, amount):
-            success = False
-            break
+    try:
+        for category, amount in state['budgets'].items():
+            if not database.add_budget(state['month'], category, amount):
+                success = False
+                error_msg = f"Failed to save budget for category {category}"
+                break
+    except Exception as e:
+        success = False
+        error_msg = str(e)
+        logging.exception(
+            f"""Error in save_budgets for chat_id={chat_id}.
+            State: {state}
+            Error: {str(e)}"""
+        )
     
     if success:
         bot.send_message(
@@ -249,7 +260,7 @@ def save_budgets(chat_id):
     else:
         bot.send_message(
             chat_id,
-            "An error occurred while saving the budget targets.",
+            f"An error occurred while saving the budget targets: {error_msg}",
             reply_markup=types.ReplyKeyboardRemove()
         )
     
