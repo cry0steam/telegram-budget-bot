@@ -1,3 +1,3 @@
 """Categories for expense tracking."""
 
-EXPENSE_CATEGORIES = ['Grocery', 'Bills', 'Travel', 'Subs', 'Misc', 'Reserve'] 
+EXPENSE_CATEGORIES = ['Grocery', 'Bills', 'Commute', 'Subs', 'Misc', 'Reserve', "Travel"] 

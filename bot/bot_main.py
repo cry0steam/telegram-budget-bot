@@ -342,6 +342,51 @@ def check_message_for_transaction(message):
         bot.send_message(chat_id, err)
 
 
+@bot.message_handler(commands=['dump'])
+def dump_data(message):
+    """Send Excel file with complete database dump."""
+    chat_id = message.chat.id
+    try:
+        # Create Excel writer
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            # Get expenses data
+            conn = sqlite3.connect(DB_FILE)
+            
+            # Dump expenses table
+            expenses_df = pd.read_sql_query(
+                'SELECT * FROM expenses ORDER BY created_at DESC', 
+                conn
+            )
+            expenses_df.to_excel(writer, sheet_name='Expenses', index=False)
+            
+            # Dump planned_expenses table
+            budget_df = pd.read_sql_query(
+                'SELECT * FROM planned_expenses ORDER BY month, category', 
+                conn
+            )
+            budget_df.to_excel(writer, sheet_name='Budget', index=False)
+            
+            conn.close()
+        
+        # Prepare the file for sending
+        output.seek(0)
+        
+        # Send the file
+        bot.send_document(
+            chat_id,
+            ('database_dump.xlsx', output),
+            caption='Complete database dump'
+        )
+        
+    except Exception as e:
+        logging.exception("Error creating database dump")
+        bot.send_message(
+            chat_id,
+            'An error occurred while creating the database dump.'
+        )
+
+
 @bot.message_handler(func=lambda message: True)
 def send_basic_message(message):
     bot.send_message(message.chat.id, messages.NOT_TRANSACTION)
