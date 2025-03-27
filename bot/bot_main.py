@@ -82,9 +82,16 @@ def last_expenses(message):
 def actual_expenses(message):
     chat_id = message.chat.id
     try:
-        data = database.get_current_month_expenses()
+        data, total, travel_amount = database.get_current_month_expenses()
         columns = ['Category', 'Total Amount (EUR)']
-        buf = expense_viz.create_expense_table(data, columns, 'Current Month Expenses')
+        buf = expense_viz.create_expense_table(
+            data, 
+            columns, 
+            'Current Month Expenses',
+            include_total=True,
+            total=total,
+            travel_data=travel_amount
+        )
         bot.send_photo(chat_id, buf, caption='Here are your current month expenses by category:')
 
     except Exception as e:

@@ -69,7 +69,7 @@ def get_last_expenses(limit=5):
     cursor = conn.cursor()
 
     cursor.execute(
-        'SELECT date, username, pos, amount, currency, amount_eur, category FROM expenses ORDER BY date DESC LIMIT ?',
+        'SELECT date, username, pos, amount, currency, amount_eur, category FROM expenses ORDER BY created_at DESC LIMIT ?',
         (limit,),
     )
 
@@ -116,15 +116,33 @@ def get_current_month_expenses():
         # Get current month's data from the 5th
         start_date = f"{today.year}-{today.month:02d}-05T00:00:00"
 
+    # Get main expenses (excluding Travel)
     cursor.execute('''
-        SELECT category, SUM(amount_eur) as total_amount
+        SELECT category, ROUND(SUM(amount_eur), 2) as total_amount
         FROM expenses 
-        WHERE created_at >= ? 
+        WHERE created_at >= ? AND category != 'Travel'
         GROUP BY category
         ORDER BY total_amount DESC
     ''', (start_date,))
+    main_results = cursor.fetchall()
 
-    results = cursor.fetchall()
+    # Calculate total (excluding Travel)
+    cursor.execute('''
+        SELECT ROUND(SUM(amount_eur), 2) as total_amount
+        FROM expenses 
+        WHERE created_at >= ? AND category != 'Travel'
+    ''', (start_date,))
+    total = cursor.fetchone()[0] or 0.0
+
+    # Get Travel expenses separately
+    cursor.execute('''
+        SELECT 'Travel' as category, ROUND(SUM(amount_eur), 2) as total_amount
+        FROM expenses 
+        WHERE created_at >= ? AND category = 'Travel'
+    ''', (start_date,))
+    travel_result = cursor.fetchone()
+    travel_amount = travel_result[1] if travel_result and travel_result[1] else 0.0
+
     conn.close()
 
-    return results
+    return main_results, total, travel_amount
