@@ -2,6 +2,7 @@ import os
 import sqlite3
 from datetime import datetime
 import logging
+from categories import EXPENSE_CATEGORIES
 
 DB_FILE = os.getenv('DB_FILE', 'expenses.db')
 
@@ -241,63 +242,74 @@ def get_budget_comparison():
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
-    # Get all months that have either budget or expenses
-    cursor.execute('''
-        WITH months AS (
-            -- Get months from planned_expenses
-            SELECT DISTINCT CAST(month AS INTEGER) as month FROM planned_expenses
-            UNION
-            -- Get months from expenses (extract month from created_at)
-            SELECT DISTINCT CAST(strftime('%m', substr(created_at, 1, 10)) AS INTEGER) as month 
-            FROM expenses
-            WHERE created_at >= datetime('now', 'start of year')
-        )
-        SELECT month FROM months ORDER BY month
-    ''')
-    months = [row[0] for row in cursor.fetchall()]
-
-    result = []
-    for month in months:
-        # Get budget data for the month
+    try:
+        # Get all months that have either budget or expenses
         cursor.execute('''
-            SELECT category, amount_eur
-            FROM planned_expenses
-            WHERE month = ?
-        ''', (f"{month:02d}",))  # Convert month number to text format
-        budget_data = dict(cursor.fetchall())
+            WITH months AS (
+                -- Get months from planned_expenses
+                SELECT DISTINCT month FROM planned_expenses
+                UNION
+                -- Get months from expenses (extract month from created_at)
+                SELECT DISTINCT strftime('%m', substr(created_at, 1, 10)) as month 
+                FROM expenses
+                WHERE created_at >= datetime('now', 'start of year')
+            )
+            SELECT month FROM months ORDER BY month
+        ''')
+        months = [row[0] for row in cursor.fetchall()]
+        logging.debug(f"Found months: {months}")
 
-        # Get actual expenses for the month
-        cursor.execute('''
-            SELECT category, ROUND(SUM(amount_eur), 2) as total
-            FROM expenses
-            WHERE strftime('%m', substr(created_at, 1, 10)) = ?
-            AND created_at >= datetime('now', 'start of year')
-            GROUP BY category
-        ''', (f"{month:02d}",))
-        actual_data = dict(cursor.fetchall())
+        result = []
+        for month in months:
+            # Get budget data for the month
+            cursor.execute('''
+                SELECT category, amount_eur
+                FROM planned_expenses
+                WHERE month = ?
+            ''', (month,))  # month is already in correct format
+            budget_data = dict(cursor.fetchall())
+            logging.debug(f"Month {month} budget data: {budget_data}")
 
-        # Calculate totals and remaining budget
-        month_data = {'month': month}
-        total_budget = 0
-        total_actual = 0
+            # Get actual expenses for the month
+            cursor.execute('''
+                SELECT category, ROUND(SUM(amount_eur), 2) as total
+                FROM expenses
+                WHERE strftime('%m', substr(created_at, 1, 10)) = ?
+                AND created_at >= datetime('now', 'start of year')
+                GROUP BY category
+            ''', (month,))  # month is already in correct format
+            actual_data = dict(cursor.fetchall())
+            logging.debug(f"Month {month} actual data: {actual_data}")
 
-        for category in EXPENSE_CATEGORIES:
-            budget = budget_data.get(category, 0) or 0
-            actual = actual_data.get(category, 0) or 0
-            remaining = budget - actual
+            # Calculate totals and remaining budget
+            month_data = {'month': int(month)}  # Convert month to integer for display
+            total_budget = 0
+            total_actual = 0
 
-            month_data[f"{category}_budget"] = budget
-            month_data[f"{category}_actual"] = actual
-            month_data[f"{category}_left"] = remaining
+            for category in EXPENSE_CATEGORIES:
+                budget = budget_data.get(category, 0) or 0
+                actual = actual_data.get(category, 0) or 0
+                remaining = budget - actual
 
-            total_budget += budget
-            total_actual += actual
+                month_data[f"{category}_budget"] = budget
+                month_data[f"{category}_actual"] = actual
+                month_data[f"{category}_left"] = remaining
 
-        month_data["Total_budget"] = total_budget
-        month_data["Total_actual"] = total_actual
-        month_data["Total_left"] = total_budget - total_actual
+                total_budget += budget
+                total_actual += actual
 
-        result.append(month_data)
+            month_data["Total_budget"] = total_budget
+            month_data["Total_actual"] = total_actual
+            month_data["Total_left"] = total_budget - total_actual
 
-    conn.close()
+            result.append(month_data)
+            logging.debug(f"Processed data for month {month}: {month_data}")
+
+    except Exception as e:
+        logging.exception("Error in get_budget_comparison:")
+        raise
+
+    finally:
+        conn.close()
+
     return result

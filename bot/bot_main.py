@@ -312,13 +312,14 @@ def get_budget(message):
             )
 
     except Exception as e:
+        error_msg = str(e)
         logging.exception(
             f"""Error in get_budget handler for chat_id={message.chat.id}.
-            Error = {e}"""
+            Error details: {error_msg}"""
         )
         bot.send_message(
             message.chat.id,
-            'An error occurred while getting the budget comparison.',
+            f'An error occurred while getting the budget comparison: {error_msg}',
         )
 
 
