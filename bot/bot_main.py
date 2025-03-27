@@ -285,29 +285,6 @@ def handle_budget_stop(call):
     )
 
 
-@bot.message_handler(regexp=TRANS_REGEX)
-def check_message_for_transaction(message):
-    chat_id = message.chat.id
-    trans_data = parse_message(message.text)
-    try:
-        if trans_data['currency'] == 'EUR':
-            trans_data['sum_in_eur'] = trans_data['sum']
-            write_transaction(message, trans_data)
-        elif trans_data['currency'] not in get_currency_codes():
-            check_currency_code(message, trans_data)
-        else:
-            sum_in_eur = get_rate(trans_data['currency']) * trans_data['sum']
-            trans_data['sum_in_eur'] = round(sum_in_eur, 2)
-            write_transaction(message, trans_data)
-    except Exception as err:
-        bot.send_message(chat_id, err)
-
-
-@bot.message_handler(func=lambda message: True)
-def send_basic_message(message):
-    bot.send_message(message.chat.id, messages.NOT_TRANSACTION)
-
-
 @bot.message_handler(commands=['get_budget'])
 def get_budget(message):
     """Send budget comparison table to the user."""
@@ -343,6 +320,29 @@ def get_budget(message):
             message.chat.id,
             'An error occurred while getting the budget comparison.',
         )
+
+
+@bot.message_handler(regexp=TRANS_REGEX)
+def check_message_for_transaction(message):
+    chat_id = message.chat.id
+    trans_data = parse_message(message.text)
+    try:
+        if trans_data['currency'] == 'EUR':
+            trans_data['sum_in_eur'] = trans_data['sum']
+            write_transaction(message, trans_data)
+        elif trans_data['currency'] not in get_currency_codes():
+            check_currency_code(message, trans_data)
+        else:
+            sum_in_eur = get_rate(trans_data['currency']) * trans_data['sum']
+            trans_data['sum_in_eur'] = round(sum_in_eur, 2)
+            write_transaction(message, trans_data)
+    except Exception as err:
+        bot.send_message(chat_id, err)
+
+
+@bot.message_handler(func=lambda message: True)
+def send_basic_message(message):
+    bot.send_message(message.chat.id, messages.NOT_TRANSACTION)
 
 
 def setup_bot_commands():
