@@ -120,7 +120,6 @@ def get_current_month_expenses():
         SELECT category, SUM(amount_eur) as total_amount
         FROM expenses 
         WHERE date >= ? 
-        GROUP BY category
         ORDER BY total_amount DESC
     ''', (start_date,))
 
