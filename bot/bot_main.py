@@ -2,7 +2,7 @@ import io
 import logging
 import os
 import re
-from datetime import date
+from datetime import date, datetime
 from http import HTTPStatus
 
 import matplotlib.pyplot as plt
@@ -16,6 +16,7 @@ import keyboards
 import expense_viz
 import database
 import messages
+from categories import EXPENSE_CATEGORIES
 from exceptions import (
     NoApiResponseError,
     NoCredentialsError,
@@ -40,6 +41,9 @@ RATES_URL = 'https://api.currencyapi.com/v3/latest'
 CURR_URL = 'https://api.currencyapi.com/v3/currencies'
 
 data_to_write = {}
+
+# Dictionary to store budget setting state for users
+budget_state = {}
 
 
 @bot.message_handler(commands=['start'])
@@ -105,6 +109,171 @@ def actual_expenses(message):
         )
 
 
+@bot.message_handler(commands=['top'])
+def top_expenses(message):
+    chat_id = message.chat.id
+    try:
+        data = database.get_top_expenses_per_category()
+        columns = ['Category', 'User', 'Store', 'Amount (EUR)']
+        buf = expense_viz.create_expense_table(data, columns, 'Top 5 Expenses per Category')
+        bot.send_photo(chat_id, buf, caption='Here are top 5 expenses per category:')
+
+    except Exception as e:
+        logging.exception(
+            f"""Error in top_expenses handler for chat_id={message.chat.id}.
+            Error = {e}"""
+        )
+        bot.send_message(
+            message.chat.id,
+            'An error occurred while getting the top expenses.',
+        )
+
+
+@bot.message_handler(commands=['add_budget'])
+def start_budget_setup(message):
+    """Start the budget setup process."""
+    chat_id = message.chat.id
+    
+    # Initialize state for this user
+    budget_state[chat_id] = {
+        'month': None,
+        'current_category': None,
+        'budgets': {}
+    }
+    
+    markup = keyboards.get_stop_markup()
+    msg = bot.send_message(
+        chat_id,
+        "Please enter the month (1-12) for which you want to set the budget:",
+        reply_markup=markup
+    )
+    bot.register_next_step_handler(msg, process_month)
+
+
+def process_month(message):
+    """Process the month input and start category budget setup."""
+    chat_id = message.chat.id
+    
+    try:
+        month = int(message.text)
+        if 1 <= month <= 12:
+            budget_state[chat_id]['month'] = month
+            start_category_budget(chat_id)
+        else:
+            markup = keyboards.get_stop_markup()
+            msg = bot.send_message(
+                chat_id,
+                "Please enter a valid month (1-12):",
+                reply_markup=markup
+            )
+            bot.register_next_step_handler(msg, process_month)
+    except ValueError:
+        markup = keyboards.get_stop_markup()
+        msg = bot.send_message(
+            chat_id,
+            "Please enter a valid month number (1-12):",
+            reply_markup=markup
+        )
+        bot.register_next_step_handler(msg, process_month)
+
+
+def start_category_budget(chat_id):
+    """Start the process of setting budget for each category."""
+    state = budget_state[chat_id]
+    
+    # Find the next category that needs a budget
+    next_category = None
+    for category in EXPENSE_CATEGORIES:
+        if category not in state['budgets']:
+            next_category = category
+            break
+    
+    if next_category:
+        state['current_category'] = next_category
+        markup = keyboards.get_stop_markup()
+        msg = bot.send_message(
+            chat_id,
+            f"Enter budget amount in EUR for {next_category}:",
+            reply_markup=markup
+        )
+        bot.register_next_step_handler(msg, process_category_budget)
+    else:
+        # All categories are done
+        save_budgets(chat_id)
+
+
+def process_category_budget(message):
+    """Process the budget amount for a category."""
+    chat_id = message.chat.id
+    state = budget_state[chat_id]
+    
+    try:
+        amount = float(message.text)
+        if amount >= 0:
+            state['budgets'][state['current_category']] = round(amount, 2)
+            start_category_budget(chat_id)  # Move to next category
+        else:
+            markup = keyboards.get_stop_markup()
+            msg = bot.send_message(
+                chat_id,
+                "Please enter a non-negative amount:",
+                reply_markup=markup
+            )
+            bot.register_next_step_handler(msg, process_category_budget)
+    except ValueError:
+        markup = keyboards.get_stop_markup()
+        msg = bot.send_message(
+            chat_id,
+            "Please enter a valid number:",
+            reply_markup=markup
+        )
+        bot.register_next_step_handler(msg, process_category_budget)
+
+
+def save_budgets(chat_id):
+    """Save all budget targets to the database."""
+    state = budget_state[chat_id]
+    success = True
+    
+    for category, amount in state['budgets'].items():
+        if not database.add_budget(state['month'], category, amount):
+            success = False
+            break
+    
+    if success:
+        bot.send_message(
+            chat_id,
+            f"Budget targets for month {state['month']} have been saved successfully!",
+            reply_markup=types.ReplyKeyboardRemove()
+        )
+    else:
+        bot.send_message(
+            chat_id,
+            "An error occurred while saving the budget targets.",
+            reply_markup=types.ReplyKeyboardRemove()
+        )
+    
+    # Clean up state
+    budget_state.pop(chat_id, None)
+
+
+@bot.callback_query_handler(func=lambda call: call.data == 'stop_budget')
+def handle_budget_stop(call):
+    """Handle the stop button press during budget setup."""
+    chat_id = call.message.chat.id
+    
+    # Clean up state
+    budget_state.pop(chat_id, None)
+    
+    bot.answer_callback_query(call.id)
+    bot.edit_message_reply_markup(chat_id, call.message.message_id, reply_markup=None)
+    bot.send_message(
+        chat_id,
+        "Budget setup has been cancelled.",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+
+
 @bot.message_handler(regexp=TRANS_REGEX)
 def check_message_for_transaction(message):
     chat_id = message.chat.id
@@ -128,12 +297,52 @@ def send_basic_message(message):
     bot.send_message(message.chat.id, messages.NOT_TRANSACTION)
 
 
+@bot.message_handler(commands=['get_budget'])
+def get_budget(message):
+    """Send budget comparison table to the user."""
+    chat_id = message.chat.id
+    try:
+        data = database.get_budget_comparison()
+        if not data:
+            bot.send_message(
+                chat_id,
+                'No budget or expense data found for this year.'
+            )
+            return
+
+        buf = expense_viz.create_budget_table(data)
+        if buf:
+            bot.send_photo(
+                chat_id,
+                buf,
+                caption='Budget vs Actual Expenses Comparison'
+            )
+        else:
+            bot.send_message(
+                chat_id,
+                'No data to display.'
+            )
+
+    except Exception as e:
+        logging.exception(
+            f"""Error in get_budget handler for chat_id={message.chat.id}.
+            Error = {e}"""
+        )
+        bot.send_message(
+            message.chat.id,
+            'An error occurred while getting the budget comparison.',
+        )
+
+
 def setup_bot_commands():
     """Setup bot commands in the Bot Menu"""
     commands = [
         types.BotCommand(command='start', description='Start the bot'),
         types.BotCommand(command='last', description='Show last 10 expenses'),
         types.BotCommand(command='actual', description='Get actual month expenses'),
+        types.BotCommand(command='top', description='Show top 5 expenses per category'),
+        types.BotCommand(command='add_budget', description='Set budget targets for a month'),
+        types.BotCommand(command='get_budget', description='Show budget vs actual expenses'),
     ]
     bot.set_my_commands(commands)
 
