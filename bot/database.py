@@ -109,17 +109,18 @@ def get_current_month_expenses():
     if today.day < 5:
         # If we're before the 5th, get previous month's data from the 5th
         if today.month == 1:
-            start_date = f"{today.year-1}-12-05"
+            start_date = f"{today.year-1}-12-05T00:00:00"
         else:
-            start_date = f"{today.year}-{today.month-1:02d}-05"
+            start_date = f"{today.year}-{today.month-1:02d}-05T00:00:00"
     else:
         # Get current month's data from the 5th
-        start_date = f"{today.year}-{today.month:02d}-05"
+        start_date = f"{today.year}-{today.month:02d}-05T00:00:00"
 
     cursor.execute('''
         SELECT category, SUM(amount_eur) as total_amount
         FROM expenses 
-        WHERE date >= ? 
+        WHERE created_at >= ? 
+        GROUP BY category
         ORDER BY total_amount DESC
     ''', (start_date,))
 
