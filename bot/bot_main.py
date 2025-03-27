@@ -4,6 +4,7 @@ import os
 import re
 from datetime import date, datetime
 from http import HTTPStatus
+import sqlite3
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -351,10 +352,10 @@ def setup_bot_commands():
     commands = [
         types.BotCommand(command='start', description='Start the bot'),
         types.BotCommand(command='last', description='Show last 10 expenses'),
-        types.BotCommand(command='actual', description='Get actual month expenses'),
         types.BotCommand(command='top', description='Show top 5 expenses per category'),
         types.BotCommand(command='add_budget', description='Set budget targets for a month'),
         types.BotCommand(command='get_budget', description='Show budget vs actual expenses'),
+        types.BotCommand(command='dump', description='Get complete database dump'),
     ]
     bot.set_my_commands(commands)
 
@@ -415,11 +416,12 @@ def write_transaction(message, trans_data):
         bot.register_next_step_handler(cat_msg, get_category, trans_data)
     else:
         data_to_write[chat_id] = trans_data
-        message = f'<b>Store</b>: {trans_data["pos"]}\
-                    <b>Price</b>: {trans_data["sum"]}\
-                    <b>Currency</b>: {trans_data["currency"]}\
-                    <b>Sum in EUR</b>: {trans_data["sum_in_eur"]}\
-                    <b>Category</b>: {trans_data["category"]}'
+        message_text = (
+            f"📍 <b>Store</b>: {trans_data['pos']}\n"
+            f"💰 <b>Price</b>: {trans_data['sum']} {trans_data['currency']}\n"
+            f"🔄 <b>EUR Amount</b>: {trans_data['sum_in_eur']:.2f}\n"
+            f"📊 <b>Category</b>: {trans_data['category']}"
+        )
 
         markup = quick_markup(
             {
@@ -431,7 +433,7 @@ def write_transaction(message, trans_data):
 
         bot.send_message(
             chat_id,
-            message,
+            message_text,
             'HTML',
             reply_markup=types.ReplyKeyboardRemove(),
         )
@@ -443,20 +445,72 @@ def write_transaction(message, trans_data):
         )
 
 
+def check_budget_status(chat_id, category, amount):
+    """Check budget status and send notification if needed."""
+    try:
+        # Get current month's budget data
+        current_month = datetime.now().strftime("%m")
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+        
+        # Get budget amount
+        cursor.execute(
+            'SELECT amount_eur FROM planned_expenses WHERE month = ? AND category = ?',
+            (current_month, category)
+        )
+        budget_row = cursor.fetchone()
+        if not budget_row:
+            return  # No budget set for this category
+        
+        budget = budget_row[0]
+        
+        # Get total expenses for this category this month
+        cursor.execute('''
+            SELECT COALESCE(SUM(amount_eur), 0) 
+            FROM expenses 
+            WHERE category = ? 
+            AND strftime('%m', substr(created_at, 1, 10)) = ?
+        ''', (category, current_month))
+        
+        total_expenses = cursor.fetchone()[0]
+        remaining = budget - total_expenses
+        
+        # Prepare notification if needed
+        if remaining < 0:
+            bot.send_message(
+                chat_id,
+                f"⚠️ Warning: Category '{category}' is over budget by {abs(remaining):.2f} EUR",
+                parse_mode='HTML'
+            )
+        elif remaining < (budget * 0.1):  # Less than 10% remaining
+            bot.send_message(
+                chat_id,
+                f"⚠️ Warning: Only {remaining:.2f} EUR left in '{category}' budget ({(remaining/budget*100):.1f}%)",
+                parse_mode='HTML'
+            )
+    
+    except Exception as e:
+        logging.exception("Error checking budget status")
+    finally:
+        conn.close()
+
+
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     """Handle callback action."""
     chat_id = call.message.chat.id
     user = call.from_user
     trans_data = data_to_write.get(chat_id)
+    
     if call.data == 'decline':
         bot.answer_callback_query(call.id, 'Declined')
-        trans_data.pop(chat_id, None)
+        data_to_write.pop(chat_id, None)
         bot.delete_message(chat_id, call.message.id)
         bot.send_message(
             chat_id,
             messages.TRANSACTION_DELETED,
         )
+    
     if call.data == 'approve':
         trans_date = date.today()
         database.add_expense(
@@ -475,6 +529,8 @@ def callback_query(call):
             chat_id,
             messages.TRANSACTION_SAVED,
         )
+        # Check budget status after saving
+        check_budget_status(chat_id, trans_data['category'], trans_data['sum_in_eur'])
 
 
 def get_category(message, trans_data):

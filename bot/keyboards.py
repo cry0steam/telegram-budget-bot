@@ -4,12 +4,10 @@ from categories import EXPENSE_CATEGORIES
 
 def category_keyboard():
     """Keyboard with categories markup."""
-    keys = EXPENSE_CATEGORIES
-    markup = types.ReplyKeyboardMarkup(row_width=3)
-    row = [types.KeyboardButton(x) for x in keys[:3]]
-    markup.add(*row)
-    row = [types.KeyboardButton(x) for x in keys[3:6]]
-    markup.add(*row)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=3)
+    buttons = [types.KeyboardButton(cat) for cat in EXPENSE_CATEGORIES]
+    # Add buttons in rows of 3
+    markup.add(*buttons)
     return markup
 
 
