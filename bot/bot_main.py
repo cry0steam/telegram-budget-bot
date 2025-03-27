@@ -13,7 +13,7 @@ from telebot import TeleBot, types
 from telebot.util import quick_markup
 
 import keyboards
-
+import expense_viz
 import database
 import messages
 from exceptions import (
@@ -64,37 +64,8 @@ def last_expenses(message):
             'Amount EUR',
             'Category',
         ]
-        df = pd.DataFrame(data, columns=columns)
-        # Create a figure and a table
-        fig, ax = plt.subplots(figsize=(12, 6))
-        ax.axis('off')  # Hide axis
-
-        # Create the table and style it
-        table = ax.table(
-            cellText=df.values,
-            colLabels=df.columns,
-            loc='center',
-            cellLoc='center',
-            colColours=['#f2f2f2'] * len(df.columns),
-        )
-
-        # Style the table
-        table.auto_set_font_size(False)
-        table.set_fontsize(10)
-        table.scale(1, 1.5)  # Adjust table size
-
-        # Title
-        plt.title('Last 10 Expenses', fontsize=16)
-
-        # Save figure to a bytes buffer
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
-        buf.seek(0)
-
-        # Send the image
+        buf = expense_viz.create_expense_table(data, columns, 'Last 10 Expenses')
         bot.send_photo(chat_id, buf, caption='Here are your last 10 expenses:')
-
-        plt.close(fig)  # Close the figure to free memory
 
     except Exception as e:
         logging.exception(
@@ -104,6 +75,26 @@ def last_expenses(message):
         bot.send_message(
             message.chat.id,
             'An error occurred while getting the last expenses.',
+        )
+
+
+@bot.message_handler(commands=['actual'])
+def actual_expenses(message):
+    chat_id = message.chat.id
+    try:
+        data = database.get_current_month_expenses()
+        columns = ['Category', 'Total Amount (EUR)']
+        buf = expense_viz.create_expense_table(data, columns, 'Current Month Expenses')
+        bot.send_photo(chat_id, buf, caption='Here are your current month expenses by category:')
+
+    except Exception as e:
+        logging.exception(
+            f"""Error in actual_expenses handler for chat_id={message.chat.id}.
+            Error = {e}"""
+        )
+        bot.send_message(
+            message.chat.id,
+            'An error occurred while getting the current month expenses.',
         )
 
 
@@ -135,6 +126,7 @@ def setup_bot_commands():
     commands = [
         types.BotCommand(command='start', description='Start the bot'),
         types.BotCommand(command='last', description='Show last 10 expenses'),
+        types.BotCommand(command='actual', description='Get actual month expenses'),
     ]
     bot.set_my_commands(commands)
 
@@ -310,11 +302,15 @@ def check_tokens():
     return True
 
 
-if __name__ == '__main__':
+def main():
     if not check_tokens():
         raise NoCredentialsError
 
-    setup_bot_commands()
     database.init_db()
+    setup_bot_commands()
 
     bot.polling(skip_pending=True)
+
+
+if __name__ == '__main__':
+    main()

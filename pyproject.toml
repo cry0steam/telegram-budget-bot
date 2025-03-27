@@ -11,6 +11,8 @@ known-local-folder= [
     "messages",
     "database",
     "exceptions",
+    "keyboards",
+    "currencyapi",
 ]
 
 [tool.ruff.lint.pycodestyle]
