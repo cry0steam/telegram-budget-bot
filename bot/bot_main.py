@@ -351,7 +351,7 @@ def dump_data(message):
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             # Get expenses data
-            conn = sqlite3.connect(DB_FILE)
+            conn = sqlite3.connect('expenses.db')
             
             # Dump expenses table
             expenses_df = pd.read_sql_query(
@@ -383,7 +383,7 @@ def dump_data(message):
         logging.exception("Error creating database dump")
         bot.send_message(
             chat_id,
-            'An error occurred while creating the database dump.'
+            f'An error occurred while creating the database dump: {str(e)}'
         )
 
 
@@ -495,7 +495,7 @@ def check_budget_status(chat_id, category, amount):
     try:
         # Get current month's budget data
         current_month = datetime.now().strftime("%m")
-        conn = sqlite3.connect(DB_FILE)
+        conn = sqlite3.connect('expenses.db')
         cursor = conn.cursor()
         
         # Get budget amount
@@ -514,7 +514,7 @@ def check_budget_status(chat_id, category, amount):
             SELECT COALESCE(SUM(amount_eur), 0) 
             FROM expenses 
             WHERE category = ? 
-            AND strftime('%m', substr(created_at, 1, 10)) = ?
+            AND strftime('%m', created_at) = ?
         ''', (category, current_month))
         
         total_expenses = cursor.fetchone()[0]
